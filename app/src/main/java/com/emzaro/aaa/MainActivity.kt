@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,12 +34,7 @@ fun AAAStudio() {
             NavigationRail(containerColor = Color(0xFF11141B), modifier = Modifier.width(92.dp)) {
                 Text("AAA", fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(20.dp))
                 items.forEach { label ->
-                    NavigationRailItem(
-                        selected = selected == label,
-                        onClick = { selected = label },
-                        icon = { Text(label.take(1)) },
-                        label = { Text(label, fontSize = 9.sp) }
-                    )
+                    NavigationRailItem(selected = selected == label, onClick = { selected = label }, icon = { Text(label.take(1)) }, label = { Text(label, fontSize = 9.sp) })
                 }
             }
             Column(Modifier.fillMaxSize().padding(24.dp)) {
@@ -59,88 +55,64 @@ fun AAAStudio() {
     }
 }
 
-@Composable
-fun Dashboard() {
+@Composable fun Dashboard() {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Build apps from your phone", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            FeatureCard("AI Builder", "Describe an app and generate its project")
+            FeatureCard("AI Builder", "Generate a starter project from a description")
             FeatureCard("Cloud Build", "Build APK/AAB without a laptop")
         }
         FeatureCard("Developer Workspace", "Projects, files, editor, logs and GitHub")
     }
 }
 
-@Composable
-fun RowScope.FeatureCard(title: String, body: String) {
-    Card(Modifier.weight(1f)) {
-        Column(Modifier.padding(18.dp)) {
-            Text(title, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            Text(body)
-        }
-    }
+@Composable fun RowScope.FeatureCard(title: String, body: String) {
+    Card(Modifier.weight(1f)) { Column(Modifier.padding(18.dp)) { Text(title, fontWeight = FontWeight.Bold); Spacer(Modifier.height(6.dp)); Text(body) } }
 }
 
 @Composable fun Projects() { SimpleList("Projects", listOf("AAA Studio", "New Android App", "Imported GitHub Project")) }
 @Composable fun GitHubScreen() { SimpleList("GitHub", listOf("Import repository", "Push project", "View build runs")) }
 @Composable fun SettingsScreen() { SimpleList("Settings", listOf("AI provider", "GitHub connection", "Supabase connection", "Build preferences")) }
 
-@Composable
-fun SimpleList(title: String, values: List<String>) {
+@Composable fun SimpleList(title: String, values: List<String>) {
     Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(12.dp))
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(values) { value ->
-            Card {
-                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(value, fontSize = 16.sp)
-                    Spacer(Modifier.weight(1f))
-                    Text("›", fontSize = 24.sp)
-                }
-            }
-        }
+        items(values) { value -> Card { Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) { Text(value, fontSize = 16.sp); Spacer(Modifier.weight(1f)); Text("›", fontSize = 24.sp) } } }
     }
 }
 
-@Composable
-fun Editor() {
+@Composable fun Editor() {
     var code by remember { mutableStateOf("fun main() {\n    println(\"Hello from AAA\")\n}") }
     Column {
         Text("Main.kt", fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = code,
-            onValueChange = { code = it },
-            modifier = Modifier.fillMaxWidth().height(420.dp),
-            textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace)
-        )
+        OutlinedTextField(value = code, onValueChange = { code = it }, modifier = Modifier.fillMaxWidth().height(420.dp), textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace))
     }
 }
 
-@Composable
-fun AIBuilder() {
+@Composable fun AIBuilder() {
+    val context = LocalContext.current
     var prompt by remember { mutableStateOf("") }
+    var result by remember { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("AI App Builder", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Text("Describe the app you want AAA to create.")
-        OutlinedTextField(
-            value = prompt,
-            onValueChange = { prompt = it },
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 4,
-            placeholder = { Text("Build me a marketplace app with phone login...") }
-        )
-        Button(onClick = {}) { Text("Generate Project") }
+        Text("Describe an app and AAA will create a starter project on the phone.")
+        OutlinedTextField(value = prompt, onValueChange = { prompt = it }, modifier = Modifier.fillMaxWidth(), minLines = 4, placeholder = { Text("Build me a marketplace app with phone login...") })
+        Button(onClick = {
+            val project = AIProjectGenerator(StudioEngine(context)).generate(prompt)
+            result = "Created: ${project.name}"
+        }, enabled = prompt.isNotBlank()) { Text("Generate Project") }
+        if (result.isNotBlank()) Text(result, color = Color(0xFF8BE28B))
+        Text("Production AI providers can be connected securely through a backend; API secrets should not be embedded in the APK.", color = Color.LightGray, fontSize = 12.sp)
     }
 }
 
-@Composable
-fun BuildScreen(type: String) {
+@Composable fun BuildScreen(type: String) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(type, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text("Cloud build workspace")
         Button(onClick = {}) { Text("Start $type Build") }
-        Text("Build status and logs will appear here.", color = Color.LightGray)
+        Text("Use the GitHub Actions workflow to run the cloud build. Build status and artifacts are shown in GitHub Actions.", color = Color.LightGray)
     }
 }
