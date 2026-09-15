@@ -1,5 +1,7 @@
 package com.emzaro.aaa
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -40,7 +42,7 @@ fun AAAStudio() {
             }
             Column(Modifier.fillMaxSize().padding(24.dp)) {
                 Text("AAA Mobile Studio", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                Text("AI-powered mobile development workspace", color = Color.LightGray)
+                Text("AI-powered Android development workspace", color = Color.LightGray)
                 Spacer(Modifier.height(24.dp))
                 when (selected) {
                     "Dashboard" -> Dashboard()
@@ -62,9 +64,9 @@ fun AAAStudio() {
         Text("Build apps from your phone", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             FeatureCard("AI Builder", "Generate a starter project from a description", Modifier.weight(1f))
-            FeatureCard("Cloud Build", "Build APK/AAB without a laptop", Modifier.weight(1f))
+            FeatureCard("Cloud Build", "Build APK/AAB with GitHub Actions", Modifier.weight(1f))
         }
-        FeatureCard("Developer Workspace", "Projects, files, editor, imports, logs and GitHub")
+        FeatureCard("Android Studio Workspace", "Project tree, Kotlin/Java/XML/Gradle editor, file operations, search and local storage")
     }
 }
 
@@ -76,16 +78,21 @@ fun AAAStudio() {
 fun Projects() {
     val context = LocalContext.current
     var selectedProject by remember { mutableStateOf<File?>(null) }
-    val projects = StudioEngine(context).listProjects()
+    var refreshKey by remember { mutableIntStateOf(0) }
+    val projects = remember(refreshKey) { StudioEngine(context).listProjects() }
     if (selectedProject == null) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Local Projects", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Local Projects", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.weight(1f))
+                OutlinedButton(onClick = { refreshKey++ }) { Text("↻ Refresh") }
+            }
             Text("Android Studio-style projects stored on this phone.", color = Color.LightGray)
             if (projects.isEmpty()) Text("No local projects yet. Use AI Builder or Import to create one.")
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(projects) { project ->
                     Card { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(project.name, fontWeight = FontWeight.SemiBold)
+                        Text("📁  ${project.name}", fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.weight(1f))
                         Button(onClick = { selectedProject = project }) { Text("Open") }
                     } }
@@ -102,26 +109,40 @@ fun ProjectExplorer(project: File, onBack: () -> Unit) {
     var openedPath by remember { mutableStateOf<String?>(null) }
     var content by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
-    val files = LocalProjectFiles(project).listAll().sorted()
+    var search by remember { mutableStateOf("") }
+    var refreshKey by remember { mutableIntStateOf(0) }
+    var dialog by remember { mutableStateOf<String?>(null) }
+    val manager = remember(project) { LocalProjectFiles(project) }
+    val allFiles = remember(refreshKey) { manager.listAll().sorted() }
+    val files = allFiles.filter { search.isBlank() || it.contains(search, ignoreCase = true) }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = onBack) { Text("← Projects") }
             Spacer(Modifier.width(12.dp))
-            Text(project.name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("📂 ${project.name}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            OutlinedButton(onClick = { refreshKey++ }) { Text("↻ Refresh") }
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { dialog = "file" }) { Text("+ File") }
+            OutlinedButton(onClick = { dialog = "folder" }) { Text("+ Folder") }
+            OutlinedButton(enabled = openedPath != null, onClick = { dialog = "delete" }) { Text("🗑 Delete") }
+        }
+        OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, placeholder = { Text("🔍 Search project files...") })
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Card(Modifier.width(270.dp).fillMaxHeight()) {
+            Card(Modifier.width(300.dp).fillMaxHeight()) {
                 Column(Modifier.padding(12.dp)) {
                     Text("Project Files", fontWeight = FontWeight.Bold)
+                    Text("app / src / main / java / res / assets", color = Color.LightGray, fontSize = 11.sp)
                     Spacer(Modifier.height(8.dp))
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         items(files) { path ->
                             TextButton(onClick = {
-                                runCatching { content = LocalProjectFiles(project).read(path); openedPath = path; message = "" }
+                                runCatching { content = manager.read(path); openedPath = path; message = "" }
                                     .onFailure { message = "Cannot open file: ${it.message}" }
                             }, modifier = Modifier.fillMaxWidth()) {
-                                Text(fileIcon(path) + " " + path, fontSize = 12.sp)
+                                Text(fileIcon(path) + "  " + path, fontSize = 12.sp)
                             }
                         }
                     }
@@ -132,28 +153,55 @@ fun ProjectExplorer(project: File, onBack: () -> Unit) {
                     Text(openedPath ?: "Select a file", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     if (openedPath != null) {
-                        OutlinedTextField(
-                            value = content,
-                            onValueChange = { content = it },
-                            modifier = Modifier.fillMaxWidth().weight(1f),
-                            textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-                        )
+                        OutlinedTextField(value = content, onValueChange = { content = it; message = "" }, modifier = Modifier.fillMaxWidth().weight(1f), textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp))
                         Spacer(Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Button(onClick = {
-                                runCatching { LocalProjectFiles(project).write(openedPath!!, content); message = "Saved $openedPath" }
-                                    .onFailure { message = "Save failed: ${it.message}" }
-                            }) { Text("Save") }
+                            Button(onClick = { runCatching { manager.write(openedPath!!, content); message = "Saved $openedPath" }.onFailure { message = "Save failed: ${it.message}" } }) { Text("💾 Save") }
                             Spacer(Modifier.width(10.dp))
                             Text(message, color = if (message.startsWith("Saved")) Color(0xFF8BE28B) else Color.LightGray, fontSize = 12.sp)
                         }
                     } else {
-                        Text("Choose a Kotlin, Java, XML, Gradle, JSON, properties or other supported project file from the tree.")
+                        Text("Open a Kotlin, Java, XML, Gradle, JSON, properties, Markdown or other project file.")
                     }
                 }
             }
         }
     }
+
+    if (dialog != null) {
+        ProjectActionDialog(dialog!!, onDismiss = { dialog = null }, onDone = { path, isFolder ->
+            runCatching {
+                if (isFolder) manager.createFolder(path) else manager.createFile(path)
+                message = "Created $path"
+                refreshKey++
+            }.onFailure { message = "Create failed: ${it.message}" }
+            dialog = null
+        }, onDelete = {
+            runCatching {
+                manager.delete(openedPath!!)
+                message = "Deleted $openedPath"
+                openedPath = null
+                content = ""
+                refreshKey++
+            }.onFailure { message = "Delete failed: ${it.message}" }
+            dialog = null
+        }, selectedPath = openedPath)
+    }
+}
+
+@Composable
+fun ProjectActionDialog(kind: String, onDismiss: () -> Unit, onDone: (String, Boolean) -> Unit, onDelete: () -> Unit, selectedPath: String?) {
+    var path by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = onDismiss,
+        title = { Text(if (kind == "delete") "Delete file/folder" else if (kind == "folder") "Create folder" else "Create file") },
+        text = {
+            if (kind == "delete") Text("Delete ${selectedPath ?: "the selected item"}? This cannot be undone.")
+            else OutlinedTextField(value = path, onValueChange = { path = it }, singleLine = true, placeholder = { Text(if (kind == "folder") "app/src/main/assets" else "app/src/main/res/values/new.xml") })
+        },
+        confirmButton = {
+            Button(onClick = { if (kind == "delete") onDelete() else if (path.isNotBlank()) onDone(path, kind == "folder") }, enabled = kind == "delete" || path.isNotBlank()) { Text(if (kind == "delete") "Delete" else "Create") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
 fun fileIcon(path: String): String = when {
@@ -162,7 +210,9 @@ fun fileIcon(path: String): String = when {
     path.endsWith(".xml") -> "X"
     path.endsWith(".gradle") || path.endsWith(".gradle.kts") -> "G"
     path.endsWith(".json") -> "{}"
+    path.endsWith(".properties") -> "P"
     path.endsWith(".md") -> "M"
+    path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".webp") -> "IMG"
     else -> "•"
 }
 
@@ -217,10 +267,17 @@ fun fileIcon(path: String): String = when {
 }
 
 @Composable fun BuildScreen(type: String) {
+    val context = LocalContext.current
+    val actionsUrl = "https://github.com/emzaro731-byte/aaa/actions/workflows/android.yml"
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(type, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Text("Cloud build workspace")
-        Button(onClick = {}) { Text("Start $type Build") }
-        Text("Builds run in GitHub Actions. The workflow supports manual dispatch and push-triggered builds.", color = Color.LightGray)
+        Text("Cloud build integration")
+        Card { Column(Modifier.padding(16.dp)) {
+            Text(if (type == "Build APK") "Debug APK" else "Release AAB", fontWeight = FontWeight.Bold)
+            Text("The project is built by the Android GitHub Actions workflow.", color = Color.LightGray)
+            Spacer(Modifier.height(10.dp))
+            Button(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(actionsUrl))) }) { Text("Open Build Workflow") }
+        } }
+        Text("Use GitHub Actions to run the APK/AAB build securely. Private signing keys and tokens must stay in GitHub Secrets, not inside the APK.", color = Color.LightGray, fontSize = 12.sp)
     }
 }
