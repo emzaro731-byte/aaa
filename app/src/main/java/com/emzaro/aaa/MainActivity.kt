@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AAAStudio() {
     var selected by remember { mutableStateOf("Dashboard") }
-    val items = listOf("Dashboard", "Projects", "Code Editor", "AI Builder", "Build APK", "Build AAB", "GitHub", "Settings")
+    val items = listOf("Dashboard", "Projects", "Code Editor", "AI Builder", "Import", "Build APK", "Build AAB", "GitHub", "Settings")
     MaterialTheme(colorScheme = darkColorScheme()) {
         Row(Modifier.fillMaxSize().background(Color(0xFF0B0D12))) {
             NavigationRail(containerColor = Color(0xFF11141B), modifier = Modifier.width(92.dp)) {
@@ -46,6 +46,7 @@ fun AAAStudio() {
                     "Projects" -> Projects()
                     "Code Editor" -> Editor()
                     "AI Builder" -> AIBuilder()
+                    "Import" -> ImportScreen()
                     "Build APK", "Build AAB" -> BuildScreen(selected)
                     "GitHub" -> GitHubScreen()
                     "Settings" -> SettingsScreen()
@@ -62,7 +63,7 @@ fun AAAStudio() {
             FeatureCard("AI Builder", "Generate a starter project from a description")
             FeatureCard("Cloud Build", "Build APK/AAB without a laptop")
         }
-        FeatureCard("Developer Workspace", "Projects, files, editor, logs and GitHub")
+        FeatureCard("Developer Workspace", "Projects, files, editor, imports, logs and GitHub")
     }
 }
 
@@ -99,12 +100,22 @@ fun AAAStudio() {
         Text("AI App Builder", fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text("Describe an app and AAA will create a starter project on the phone.")
         OutlinedTextField(value = prompt, onValueChange = { prompt = it }, modifier = Modifier.fillMaxWidth(), minLines = 4, placeholder = { Text("Build me a marketplace app with phone login...") })
-        Button(onClick = {
-            val project = AIProjectGenerator(StudioEngine(context)).generate(prompt)
-            result = "Created: ${project.name}"
-        }, enabled = prompt.isNotBlank()) { Text("Generate Project") }
+        Button(onClick = { result = "Created: ${AIProjectGenerator(StudioEngine(context)).generate(prompt).name}" }, enabled = prompt.isNotBlank()) { Text("Generate Project") }
         if (result.isNotBlank()) Text(result, color = Color(0xFF8BE28B))
-        Text("Production AI providers can be connected securely through a backend; API secrets should not be embedded in the APK.", color = Color.LightGray, fontSize = 12.sp)
+        Text("Connect a backend AI provider for production code generation. Never embed private API keys in the APK.", color = Color.LightGray, fontSize = 12.sp)
+    }
+}
+
+@Composable fun ImportScreen() {
+    val context = LocalContext.current
+    var url by remember { mutableStateOf("") }
+    var result by remember { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Import Project", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text("Import a public GitHub repository into the AAA workspace.")
+        OutlinedTextField(value = url, onValueChange = { url = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("https://github.com/owner/repository") })
+        Button(onClick = { runCatching { ProjectImporter(StudioEngine(context)).importPublicGithub(url) }.onSuccess { result = "Imported: ${it.name}" }.onFailure { result = "Import error: ${it.message}" } }, enabled = url.isNotBlank()) { Text("Import GitHub Project") }
+        if (result.isNotBlank()) Text(result)
     }
 }
 
@@ -113,6 +124,6 @@ fun AAAStudio() {
         Text(type, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text("Cloud build workspace")
         Button(onClick = {}) { Text("Start $type Build") }
-        Text("Use the GitHub Actions workflow to run the cloud build. Build status and artifacts are shown in GitHub Actions.", color = Color.LightGray)
+        Text("Builds run in GitHub Actions. The workflow supports manual dispatch and push-triggered builds.", color = Color.LightGray)
     }
 }
