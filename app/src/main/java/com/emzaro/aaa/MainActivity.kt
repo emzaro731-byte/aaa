@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,18 +61,111 @@ fun AAAStudio() {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Build apps from your phone", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            FeatureCard("AI Builder", "Generate a starter project from a description")
-            FeatureCard("Cloud Build", "Build APK/AAB without a laptop")
+            FeatureCard("AI Builder", "Generate a starter project from a description", Modifier.weight(1f))
+            FeatureCard("Cloud Build", "Build APK/AAB without a laptop", Modifier.weight(1f))
         }
         FeatureCard("Developer Workspace", "Projects, files, editor, imports, logs and GitHub")
     }
 }
 
-@Composable fun RowScope.FeatureCard(title: String, body: String) {
-    Card(Modifier.weight(1f)) { Column(Modifier.padding(18.dp)) { Text(title, fontWeight = FontWeight.Bold); Spacer(Modifier.height(6.dp)); Text(body) } }
+@Composable fun FeatureCard(title: String, body: String, modifier: Modifier = Modifier) {
+    Card(modifier) { Column(Modifier.padding(18.dp)) { Text(title, fontWeight = FontWeight.Bold); Spacer(Modifier.height(6.dp)); Text(body) } }
 }
 
-@Composable fun Projects() { SimpleList("Projects", listOf("AAA Studio", "New Android App", "Imported GitHub Project")) }
+@Composable
+fun Projects() {
+    val context = LocalContext.current
+    var selectedProject by remember { mutableStateOf<File?>(null) }
+    val projects = StudioEngine(context).listProjects()
+    if (selectedProject == null) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Local Projects", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("Android Studio-style projects stored on this phone.", color = Color.LightGray)
+            if (projects.isEmpty()) Text("No local projects yet. Use AI Builder or Import to create one.")
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(projects) { project ->
+                    Card { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(project.name, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.weight(1f))
+                        Button(onClick = { selectedProject = project }) { Text("Open") }
+                    } }
+                }
+            }
+        }
+    } else {
+        ProjectExplorer(selectedProject!!, onBack = { selectedProject = null })
+    }
+}
+
+@Composable
+fun ProjectExplorer(project: File, onBack: () -> Unit) {
+    var openedPath by remember { mutableStateOf<String?>(null) }
+    var content by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+    val files = LocalProjectFiles(project).listAll().sorted()
+
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = onBack) { Text("← Projects") }
+            Spacer(Modifier.width(12.dp))
+            Text(project.name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Card(Modifier.width(270.dp).fillMaxHeight()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("Project Files", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        items(files) { path ->
+                            TextButton(onClick = {
+                                runCatching { content = LocalProjectFiles(project).read(path); openedPath = path; message = "" }
+                                    .onFailure { message = "Cannot open file: ${it.message}" }
+                            }, modifier = Modifier.fillMaxWidth()) {
+                                Text(fileIcon(path) + " " + path, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+            Card(Modifier.weight(1f).fillMaxHeight()) {
+                Column(Modifier.fillMaxSize().padding(12.dp)) {
+                    Text(openedPath ?: "Select a file", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    if (openedPath != null) {
+                        OutlinedTextField(
+                            value = content,
+                            onValueChange = { content = it },
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Button(onClick = {
+                                runCatching { LocalProjectFiles(project).write(openedPath!!, content); message = "Saved $openedPath" }
+                                    .onFailure { message = "Save failed: ${it.message}" }
+                            }) { Text("Save") }
+                            Spacer(Modifier.width(10.dp))
+                            Text(message, color = if (message.startsWith("Saved")) Color(0xFF8BE28B) else Color.LightGray, fontSize = 12.sp)
+                        }
+                    } else {
+                        Text("Choose a Kotlin, Java, XML, Gradle, JSON, properties or other supported project file from the tree.")
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun fileIcon(path: String): String = when {
+    path.endsWith(".kt") || path.endsWith(".kts") -> "K"
+    path.endsWith(".java") -> "J"
+    path.endsWith(".xml") -> "X"
+    path.endsWith(".gradle") || path.endsWith(".gradle.kts") -> "G"
+    path.endsWith(".json") -> "{}"
+    path.endsWith(".md") -> "M"
+    else -> "•"
+}
+
 @Composable fun GitHubScreen() { SimpleList("GitHub", listOf("Import repository", "Push project", "View build runs")) }
 @Composable fun SettingsScreen() { SimpleList("Settings", listOf("AI provider", "GitHub connection", "Supabase connection", "Build preferences")) }
 
@@ -84,11 +178,14 @@ fun AAAStudio() {
 }
 
 @Composable fun Editor() {
+    val context = LocalContext.current
     var code by remember { mutableStateOf("fun main() {\n    println(\"Hello from AAA\")\n}") }
-    Column {
-        Text("Main.kt", fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(value = code, onValueChange = { code = it }, modifier = Modifier.fillMaxWidth().height(420.dp), textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace))
+    var saved by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Quick Editor", fontWeight = FontWeight.Bold)
+        OutlinedTextField(value = code, onValueChange = { code = it; saved = false }, modifier = Modifier.fillMaxWidth().height(420.dp), textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace))
+        Button(onClick = { StudioEngine(context).createProject("Quick-Project").also { StudioEngine(context).saveFile(it, "Main.kt", code) }; saved = true }) { Text("Save as Local Project") }
+        if (saved) Text("Saved locally", color = Color(0xFF8BE28B))
     }
 }
 
