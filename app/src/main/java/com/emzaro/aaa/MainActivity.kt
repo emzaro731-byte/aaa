@@ -1,0 +1,110 @@
+package com.emzaro.aaa
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent { AAAStudio() }
+    }
+}
+
+@Composable
+fun AAAStudio() {
+    var selected by remember { mutableStateOf("Dashboard") }
+    val items = listOf("Dashboard", "Projects", "Code Editor", "AI Builder", "Build APK", "Build AAB", "GitHub", "Settings")
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Row(Modifier.fillMaxSize().background(Color(0xFF0B0D12))) {
+            NavigationRail(containerColor = Color(0xFF11141B), modifier = Modifier.width(88.dp)) {
+                Text("AAA", fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(20.dp))
+                items.forEach { label ->
+                    NavigationRailItem(
+                        selected = selected == label,
+                        onClick = { selected = label },
+                        icon = { Text(label.take(1)) },
+                        label = { Text(label, fontSize = 9.sp) }
+                    )
+                }
+            }
+            Column(Modifier.fillMaxSize().padding(24.dp)) {
+                Text("AAA Mobile Studio", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Text("AI-powered mobile development workspace", color = Color.LightGray)
+                Spacer(Modifier.height(24.dp))
+                when (selected) {
+                    "Dashboard" -> Dashboard()
+                    "Projects" -> Projects()
+                    "Code Editor" -> Editor()
+                    "AI Builder" -> AIBuilder()
+                    "Build APK", "Build AAB" -> BuildScreen(selected)
+                    "GitHub" -> GitHubScreen()
+                    "Settings" -> SettingsScreen()
+                }
+            }
+        }
+    }
+}
+
+@Composable fun Dashboard() {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Build apps from your phone", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FeatureCard("AI Builder", "Describe an app and generate its project")
+            FeatureCard("Cloud Build", "Build APK/AAB without a laptop")
+        }
+        FeatureCard("Developer Workspace", "Projects, files, editor, logs and GitHub")
+    }
+}
+
+@Composable fun FeatureCard(title: String, body: String) {
+    Card(Modifier.weight(1f, fill = false)) { Column(Modifier.padding(18.dp)) { Text(title, fontWeight = FontWeight.Bold); Spacer(Modifier.height(6.dp)); Text(body) } }
+}
+
+@Composable fun Projects() { SimpleList("Projects", listOf("AAA Studio", "New Android App", "Imported GitHub Project")) }
+@Composable fun GitHubScreen() { SimpleList("GitHub", listOf("Import repository", "Push project", "View build runs")) }
+@Composable fun SettingsScreen() { SimpleList("Settings", listOf("AI provider", "GitHub connection", "Supabase connection", "Build preferences")) }
+
+@Composable fun SimpleList(title: String, values: List<String>) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) { items(values) { value -> Card { Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) { Text(value, fontSize = 16.sp); Spacer(Modifier.weight(1f)); Text("›", fontSize = 24.sp) } } } }
+}
+
+@Composable fun Editor() {
+    var code by remember { mutableStateOf("fun main() {\n    println(\"Hello from AAA\")\n}") }
+    Column {
+        Text("Main.kt", fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(value = code, onValueChange = { code = it }, modifier = Modifier.fillMaxWidth().height(420.dp), textStyle = LocalTextStyle.current.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace))
+    }
+}
+
+@Composable fun AIBuilder() {
+    var prompt by remember { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("AI App Builder", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text("Tell AAA what you want to build. The production version will connect this screen to your AI provider.")
+        OutlinedTextField(prompt, { prompt = it }, Modifier.fillMaxWidth(), placeholder = { Text("Build me a marketplace app with login...") })
+        Button(onClick = {}) { Text("Generate Project") }
+    }
+}
+
+@Composable fun BuildScreen(type: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(type, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text("Cloud build workspace")
+        Button(onClick = {}) { Text("Start $type Build") }
+        Text("Build logs will appear here.", color = Color.LightGray)
+    }
+}
